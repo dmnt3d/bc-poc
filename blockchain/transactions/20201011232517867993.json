@@ -1,0 +1,1 @@
+{"fqdn": "api.localytics.com", "hits": "0", "payload": {"description": "BLOCK api.localytics.com", "display_name": "block-api-localytics-com", "sequence_number": 1, "source_groups": ["ANY"], "destination_groups": ["ANY"], "services": ["ANY"], "profiles": ["/infra/context-profiles/ctx-api-localytics-com"], "action": "DROP"}, "enabled": "True"}
