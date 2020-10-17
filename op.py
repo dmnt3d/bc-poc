@@ -2,21 +2,29 @@
 from blockchain.lib import Ledger,Transaction
 import sys
 
+
+# python op.py add <FQDN> <HITS>
+# python op.py disable <FQDN>
+# python op.py enable <FQDN>
+
 def main (argv):
     transaction = Transaction()
     if argv[2] not in validDomains:
         print ("Domain not found in VALID domains!")
         return 1
 
-    if argv[1] == "dis":
+    if argv[1] == "disable":
         print ("Disabled FQDN: " + argv[2])
-        transaction.add(argv[2], "False")
-    elif argv[1] == "en":
-        print ("Enabledabled FQDN: " + argv[2])
-        transaction.add(argv[2], "True")
+        transaction.enabled(argv[2], "False")
+    elif argv[1] == "enable":
+        print ("Enabled FQDN: " + argv[2])
+        transaction.enabled(argv[2], "True")
     elif argv[1] == "add":
         print ("Add FQDN: "+ argv[2])
-        transaction.add(argv[2], "0")
+        if argv[3]:
+            transaction.add(argv[2], argv[3])
+        else:
+            transaction.add(argv[2], "0")
     else:
         print ("Invalid command!")
 

@@ -3,10 +3,13 @@ import datetime
 import os
 import configparser
 import requests
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from urllib3 import disable_warnings
+from urllib3.exceptions import InsecureRequestWarning
+disable_warnings(InsecureRequestWarning)
+# from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 
-requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+# requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -19,24 +22,24 @@ class Transaction:
     #     self.hits = hits
     #     self.enabled = enabled
     
-    def add(self,url, hits):
+    def add(self,fqdn, hits):
         # print(config['DEFAULT']['transactionFolder'])
         filename =  datetime.datetime.now().strftime("%Y%m%d%H%M%S%f") + ".json"
         #jsonfile = os.path.join(os.getcwd(), 'global/transactions/'+filename)
         jsonfile = str(config['DEFAULT']['transactionFolder'])+filename
-        data_set = {"fqdn": url, "hits": hits, "payload": self.getPayload(url), "enabled": "True"}
+        data_set = {"fqdn": fqdn, "hits": hits, "enabled": "True"}
         json_dump = json.dumps(data_set)
 
         file1 = open(jsonfile, "w")
         file1.write(json_dump)
         return 0
     
-    def enabled(self,url,enabled):
+    def enabled(self,fqdn,enabled):
         filename =  datetime.datetime.now().strftime("%Y%m%d%H%M%S%f") + ".json"
         #jsonfile = os.path.join(os.getcwd(), 'global/transactions/'+filename)
         jsonfile = config['DEFAULT']['transactionFolder']+filename
 
-        data_set = {"fqdn": url, "hits": "0", "enabled": str(enabled)}
+        data_set = {"fqdn": fqdn, "hits": "0", "enabled": str(enabled)}
         json_dump = json.dumps(data_set)
 
         file1 = open(jsonfile, "w")
@@ -44,10 +47,19 @@ class Transaction:
 
         return 0
     
-    def getPayload(self,url):
+    @staticmethod
+    def formatURL(fqdn):
+        formatted = fqdn
+        if fqdn[0] == '*':
+            formatted = fqdn[2:]
+        return formatted.replace('.','-')
+    
+    # create context/ rule specific methods
+    @staticmethod
+    def getRulePayload(fqdn):
         payload = {
-            "description": "BLOCK "+ url,
-            "display_name": "block-"+ self.formatURL(url),
+            "description": "BLOCK "+ fqdn,
+            "display_name": "block-"+ Transaction.formatURL(fqdn),
             "sequence_number": 1,
             "source_groups": [
             "ANY"
@@ -59,41 +71,33 @@ class Transaction:
             "ANY"
             ],
             "profiles": [
-            "/infra/context-profiles/ctx-"+ self.formatURL(url)
+            "/infra/context-profiles/ctx-"+ Transaction.formatURL(fqdn)
             ],
             "action": "DROP"
         }
         return payload
 
     @staticmethod
-    def formatURL(url):
-        formatted = url
-        if url[0] == '*':
-            formatted = url[2:]
-        return formatted.replace('.','-')
-    
-    # create context/ rule specific methods
-    @staticmethod
-    def getCTXPayload(url):
+    def getCTXPayload(fqdn):
         payload = {
             "resource_type":"PolicyContextProfile",
-            "display_name":"ctx-" + Transaction.formatURL(url),
+            "display_name":"ctx-" + Transaction.formatURL(fqdn),
             "description":"WEB REPUTATION Context",
             "attributes":[
                 {"key":"DOMAIN_NAME",
-                "value": [url],
+                "value": [fqdn],
                 "datatype":"STRING"}
                 ]
         }
         return payload
     
     @staticmethod
-    def getCTXURI(url):
-        return "/policy/api/v1/infra/context-profiles/ctx-" + Transaction.formatURL(url)
+    def getCTXURI(fqdn):
+        return "/policy/api/v1/infra/context-profiles/ctx-" + Transaction.formatURL(fqdn)
     
     @staticmethod
-    def getRuleURI(url):
-        return "/policy/api/v1/infra/domains/default/security-policies/block-url/rules/block-" + Transaction.formatURL(url)
+    def getRuleURI(fqdn):
+        return "/policy/api/v1/infra/domains/default/security-policies/block-url/rules/block-" + Transaction.formatURL(fqdn)
     
 
 
@@ -101,31 +105,54 @@ class Ledger:
     
     def __init__ (self):
         self.ledger = []
+
+    def returnIndex (self,templedger,fqdn):
+        for i in range(len(templedger)):
+            if templedger[i]["fqdn"] == fqdn:
+                return i
+        return -1
         
     def get(self):
         self.ledger = []
+        tempLedger = []
         transactionPath = config['DEFAULT']['transactionFolder'] # os.path.join(os.getcwd(), 'global/transactions/')
-        for entry in os.listdir(transactionPath):
-            with open(transactionPath + entry) as f:
+        # print (sorted(os.listdir(transactionPath), key=os.path.getctime))
+        for entry in sorted(os.listdir(transactionPath)):
+            with open(transactionPath + "/" + entry) as f:
                 data = json.load(f)
-            #print (data)           
-            self.consolidate(data)
+            # manual
+            if len(tempLedger) == 0:
+                tempLedger.append(data)
+            elif data["enabled"] == "False":
+                # entry for false, update as false
+                tempLedger[self.returnIndex(tempLedger,data["fqdn"])]["enabled"] = "False"
+            elif self.returnIndex(tempLedger,data["fqdn"]) == -1:
+                # new fqdn, append
+                tempLedger.append(data)
+            else:
+                # new hits. just add
+                tempLedger[self.returnIndex(tempLedger,data["fqdn"])]["enabled"] = data["enabled"]
+                tempLedger[self.returnIndex(tempLedger,data["fqdn"])]["hits"] = str(int(tempLedger[self.returnIndex(tempLedger,data["fqdn"])]["hits"]) + int(data["hits"]))
+            
+            # data is disabled, update ledger
+            self.ledger = tempLedger
+
+            # self.consolidate(data)
+            # print (self.ledger)
+            # print ("-----")
 
         return self.ledger
-
-    def consolidate (self,data):
-        # iterate thru current ledger
-        # check if ledger is Empty
-        if not self.ledger:
-            self.ledger.append(data)
-        else:
-            # check FQDN is present. and add the hits
-            for i in range(len(self.ledger)):
-                if self.ledger[i]["fqdn"] == data['fqdn']:
-                    self.ledger[i]["hits"] = str(int(data['hits']) + int (self.ledger[i]["hits"]))
-                    # update latest enabled status
-                    self.ledger[i]["enabled"] = data["enabled"]
-                    #print(str(data["enabled"]))
+    
+    @staticmethod
+    def getTop(ledger):
+        index = 0
+        high = 0
+        for i in range(len(ledger)):
+            if int(ledger[i]["hits"]) > high:
+                index = i
+                high = int(ledger[i]["hits"])
+        
+        return ledger[index]
             
 
 class Node:
@@ -135,6 +162,11 @@ class Node:
          self.nsxmgr = str(config[name]['nsxmgr'])
          self.nsxuser = str(config[name]['nsxuser'])
          self.nsxpass = str(config[name]['nsxpass'])
+         #self.strategy = config[name]['strategy']
+    
+    
+    def getStrategy(self):
+        return str(config[self.name]['strategy'])
 
 
     def getapi (self,uri):
@@ -150,7 +182,6 @@ class Node:
     
 
     def delapi(self,uri):
-        print ("del API URI " + uri)
         # DELETE https://<policy-mgr>/policy/api/v1/infra/domains/vmc/security-policies/application-section-1/rules/ce-1
         # ACTUAL: /policy/api/v1/infra/domains/default/security-policies/block-url/rules/block-*FQDN*
         r = requests.delete('https://'+self.nsxmgr+ uri, verify=False, auth=(self.nsxuser, self.nsxpass))
@@ -196,11 +227,11 @@ class Node:
         else:
             return 1
     
-    def createRule (self,fqdn,payload):
+    def createRule (self,fqdn):
         # transaction = Transaction()
         # payload = {"resource_type":"PolicyContextProfile","display_name":"ctx-office365","description":"Blocked by reputation","attributes":[{"key":"DOMAIN_NAME","value": ["*.office365.com"],"datatype":"STRING"}]}
         
-        code = self.putapi(Transaction.getRuleURI(fqdn), payload)
+        code = self.putapi(Transaction.getRuleURI(fqdn), Transaction.getRulePayload(fqdn))
         if code:
             return 0
         else:
@@ -241,28 +272,7 @@ class Node:
         #   get STATISTICS: ["hit_count"]
 
 
-        # GET HIT ONLY
-  #  def getActualHits(self, fqdn):
+    def printOutput (self,message):
+        print ("[" + self.name + "]["+ datetime.datetime.now().strftime("%x %X") + "] " + message)
 
-
-
-
-
-# a = Transaction()
-# b = Ledger()
-
-# # a.add('google.com','2')
-# # print(b.get()[0])
-# # a.add('google.com','12')
-# # print(b.get()[0])
-# #a.enabled('google.com',False)
-# print(b.get()[0])
-# a.add('google.com','12')
-# print(b.get()[0])
-# a.enabled('google.com',True)
-# print(b.get()[0])
-
-# # b = Ledger().get()
-
-# # print(b[0]["hits"])
-# #a.save()
+ 
