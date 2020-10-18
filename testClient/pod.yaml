@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: harbor.letsdocloud.com/gubi/queryurl:latest
+    name: busybox-curl
+    env:
+    - name: FQDN
+      value: "http://google.com"
+    # curl -LI https://login.live.com -o /dev/null -w '%{http_code}\n' -s
+    #args: ["curl", "-LI","$(FQDN)","-o","/dev/null","-w","'%{http_code}\n'", "-s"]
+    # args: ["while", "true;","do" "curl", "-LI","$(FQDN)","-o","/dev/null","-w","'%{http_code}\n'", "-s;","sleep","10;","done"]
+    args: ["while true; do curl -LI $(FQDN) -o /dev/null -w '%{http_code}\n' -s; sleep 10; done"]
+    #args: ["while", "true;","do" "curl","$(FQDN);","sleep","10;","done"]
+    #args: ["while true; do curl -LI https://login.live.com -o /dev/null -w '%{http_code}\n' -s sleep 30; done;"] # "curl", "-LI","$(FQDN)","-o","/dev/null","-w","'%{http_code}\n'", "-s"]
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}

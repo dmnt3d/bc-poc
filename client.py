@@ -2,7 +2,7 @@ from blockchain.lib import Ledger,Transaction,Node
 import subprocess
 import time
 import datetime
-
+import sys
 
 # PULL OPERATION
 # - get from GLOBAL LEDGER 
@@ -42,7 +42,7 @@ def pull(node):
         if not localLedger:
             # if localLedger is empty, dump highest as localledger
             node.printOutput("Local Ledger not found")
-            node.printOutput("Populating with TOP FQDN: "+ topFQDN["fqdn"])
+            node.printOutput("Populating with TOP FQDN: "+ topFQDN["fqdn"], "add")
             localLedger.append(topFQDN)
             localLedger[0]["hits"] = "0"
             return localLedger
@@ -65,7 +65,7 @@ def pull(node):
                 if getGlobalStatus(localLedger[i]["fqdn"],globalLedger) == "False":
                     # remove from LocalLEDGER
                     # INVOKE REMOVE API for RULE and CTX
-                    node.printOutput("Marking as disabled in local ledger FQDN: "+ localLedger[i]["fqdn"])
+                    node.printOutput("Marking as disabled in local ledger FQDN: "+ localLedger[i]["fqdn"], "remove")
                     #localLedger[i]["enabled"] = "False"
                     localLedger.pop(i)
                     # re-LOOP again ?
@@ -73,24 +73,13 @@ def pull(node):
                     break
                 reloop = False
         
-        
-        
-        # for i in range(len(localLedger)):
-        #     if getGlobalStatus(localLedger[i]["fqdn"],globalLedger) == "False":
-        #             # remove from LocalLEDGER
-        #             # INVOKE REMOVE API for RULE and CTX
-        #         node.printOutput("Marking as disabled in local ledger FQDN: "+ localLedger[i]["fqdn"])
-        #         localLedger[i]["enabled"] = "False"
-        #             #localLedger.pop(i)
-                    # re-LOOP again ?
-      
-
 
         # check GlobalLedger for items not present in LocalLedger
         for i in range(len(globalLedger)):
             if globalLedger[i]["enabled"] == "True":
                 if not checkLocalLedger(globalLedger[i]["fqdn"], localLedger):
                     node.printOutput("Found NEW FQDN from Global Ledger: "+ globalLedger[i]["fqdn"] + ".")
+                    node.printOutput("Adding to local ledger: "+ globalLedger[i]["fqdn"], "add")
                     localLedger.append(globalLedger[i])
                     # set to 0 hits; dont copy globalLedger record on HITS
                     # get to total len -1
@@ -107,30 +96,35 @@ def consolidate(node, localLedger):
     appliedLedger = node.getLocalLedger()
     if node.getStrategy() == "top":
         if not appliedLedger:
-            # means empty
-            pass
+                    # apply the localLedger rules
+            node.printOutput("Creating Context for : " + localLedger[0]["fqdn"], "add")
+            node.createCTX (localLedger[0]["fqdn"])
+            node.printOutput("Adding rule for : " + localLedger[0]["fqdn"], "add")
+            node.createRule(localLedger[0]["fqdn"])
+        
         elif appliedLedger[0]["fqdn"] != localLedger[0]["fqdn"]:
             node.printOutput("TOP FQDN changed to : " + localLedger[0]["fqdn"])
-            node.printOutput("Removing previous top FQDN:")
-            node.printOutput("Removing from Rule for FQDN: "+ appliedLedger[0]["fqdn"])
+            node.printOutput("Removing previous top FQDN:", "remove")
+            node.printOutput("Removing from Rule for FQDN: "+ appliedLedger[0]["fqdn"], "remove")
             node.delRule(appliedLedger[0]["fqdn"])
-            node.printOutput("Removing from CTX for FQDN: "+ appliedLedger[0]["fqdn"])
+            node.printOutput("Removing from CTX for FQDN: "+ appliedLedger[0]["fqdn"], )
             node.delCTX(appliedLedger[0]["fqdn"])
+            # apply the localLedger rules
+            node.printOutput("Creating Context for : " + localLedger[0]["fqdn"], "add")
+            node.createCTX (localLedger[0]["fqdn"])
+            node.printOutput("Adding rule for : " + localLedger[0]["fqdn"], "add")
+            node.createRule(localLedger[0]["fqdn"])
         
-        # apply the localLedger rules
-        node.printOutput("Creating Context for : " + localLedger[0]["fqdn"])
-        node.createCTX (localLedger[0]["fqdn"])
-        node.printOutput("Adding rule for : " + localLedger[0]["fqdn"])
-        node.createRule(localLedger[0]["fqdn"])
+        
     else:
         # all the rules 
         if not appliedLedger:
             # empty
             # apply all localLedger
             for i in range(len(localLedger)):
-                node.printOutput("Creating Context for : " + localLedger[i]["fqdn"])
+                node.printOutput("Creating Context for : " + localLedger[i]["fqdn"], "add")
                 node.createCTX (localLedger[i]["fqdn"])
-                node.printOutput("Adding rule for : " + localLedger[i]["fqdn"])
+                node.printOutput("Adding rule for : " + localLedger[i]["fqdn"], "add")
                 node.createRule(localLedger[i]["fqdn"])
         else:
             # check applied ledger
@@ -149,9 +143,9 @@ def consolidate(node, localLedger):
                 if found == 0:
                     # localLedger not found
                     # create RULE
-                    node.printOutput("Creating Context for : " + localLedger[i]["fqdn"])
+                    node.printOutput("Creating Context for : " + localLedger[i]["fqdn"], "add")
                     node.createCTX (localLedger[i]["fqdn"])
-                    node.printOutput("Adding rule for : " + localLedger[i]["fqdn"])
+                    node.printOutput("Adding rule for : " + localLedger[i]["fqdn"],"add")
                     node.createRule(localLedger[i]["fqdn"])
 
 
@@ -168,14 +162,20 @@ def consolidate(node, localLedger):
                 if found == 0:
                     # appliedLedger not found in LocalLedger
                     # delete CTX and RULE
-                    node.printOutput("Removing from Rule for FQDN: "+ appliedLedger[i]["fqdn"])
+                    node.printOutput("Removing from Rule for FQDN: "+ appliedLedger[i]["fqdn"], "remove")
                     node.delRule(appliedLedger[i]["fqdn"])
-                    node.printOutput("Removing from CTX for FQDN: "+ appliedLedger[i]["fqdn"])
+                    node.printOutput("Removing from CTX for FQDN: "+ appliedLedger[i]["fqdn"], "remove")
                     node.delCTX(appliedLedger[i]["fqdn"])
             
+            # revalidate applied rules
+            for i in range(len(localLedger)):
+                if not node.getRuleExists(localLedger[i]["fqdn"]):
+                    node.printOutput("Active Rule and Local Ledger inconsistent", "add")
+                    node.printOutput("Creating Context for : " + localLedger[i]["fqdn"], "add")
+                    node.createCTX (localLedger[i]["fqdn"])
+                    node.printOutput("Adding rule for : " + localLedger[i]["fqdn"], "add")
+                    node.createRule(localLedger[i]["fqdn"])
 
-
-                
     return localLedger
 
 def push(node, localLedger):
@@ -193,7 +193,7 @@ def push(node, localLedger):
         if int(activeHits) > int(localLedger[i]["hits"]):
             deltahit = int(activeHits) - int(localLedger[i]["hits"])
                     # add transaction
-            node.printOutput(localLedger[i]["fqdn"] + " : Adding new Transaction with DELTA HIT " + str(deltahit))
+            node.printOutput(localLedger[i]["fqdn"] + " : Adding new Transaction with DELTA HIT " + str(deltahit), "add")
             transaction.add(localLedger[i]["fqdn"],str(deltahit))
             # updating local ledger with API hit value
             localLedger[i]["hits"] = activeHits
@@ -202,18 +202,31 @@ def push(node, localLedger):
 
 
 if __name__ == "__main__":
-    node = Node("node01")
+
+    if len(sys.argv) < 1:
+        print ("No node supplied!")
+        exit(1)
+    
+    try:
+        node = Node(sys.argv[1])
+    except:
+        print ("Node not found!")
+        exit(1)
     try:
         while True:
-            node.printOutput("START PULL Operation")
+            node.printOutput("start PULL Operation","core")
+            time.sleep(2)
             localLedger = pull(node)
-            node.printOutput("START CONSOLIDATE Operation")
+            node.printOutput("end PULL Operation", "core")
+            node.printOutput("start CONSOLIDATE operation", "core")
+            time.sleep(2)
             localLedger = consolidate(node, localLedger)
-            node.printOutput("START PUSH Operation")
+            node.printOutput("start PUSH operation", "core")
+            time.sleep(2)
             localLedger = push(node, localLedger)
-            node.printOutput("DUMP to local db.json")
+            node.printOutput("Writing to local db.json", "core")
             node.dumpLocalLedger(localLedger)
-        time.sleep(3)
+        time.sleep(4)
 
     except KeyboardInterrupt:
         pass

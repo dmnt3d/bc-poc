@@ -5,7 +5,10 @@ import configparser
 import requests
 from urllib3 import disable_warnings
 from urllib3.exceptions import InsecureRequestWarning
+from colorama import Fore, Back, Style 
+
 disable_warnings(InsecureRequestWarning)
+
 # from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 
@@ -148,7 +151,7 @@ class Ledger:
         index = 0
         high = 0
         for i in range(len(ledger)):
-            if int(ledger[i]["hits"]) > high:
+            if (int(ledger[i]["hits"]) > high) and (ledger[i]["enabled"] == "True"):
                 index = i
                 high = int(ledger[i]["hits"])
         
@@ -272,7 +275,18 @@ class Node:
         #   get STATISTICS: ["hit_count"]
 
 
-    def printOutput (self,message):
-        print ("[" + self.name + "]["+ datetime.datetime.now().strftime("%x %X") + "] " + message)
+    def printOutput (self,message,type="normal"):
+        if type == "add":
+            color = Fore.GREEN
+        elif type == "remove":
+            color = Fore.RED
+        elif type == "core":
+            color = Fore.CYAN
+        else:
+            color = Fore.WHITE
+        
+        # print ("[" + self.name + "]["+ datetime.datetime.now().strftime("%x %X") + "] " + message)
+        print ("[" + Fore.YELLOW + self.name + Style.RESET_ALL + "]["+ datetime.datetime.now().strftime("%x %X") + "] " + color + message)
+        print(Style.RESET_ALL)
 
  
