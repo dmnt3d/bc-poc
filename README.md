@@ -36,3 +36,23 @@ Transaction Adder : adds transaction
                 - update localledger with HIT value from API
         - step 5: dump/ overwrite localledger
 
+===
+
+# UPDATE - new flow
+
+
+# PULL OPERATION
+# - get from GLOBAL LEDGER 
+# - Update LOCAL LEDGER in MEMORY
+# - no WRITE yet
+
+    # CONSOLIDATE
+    # - Updates LOCAL LEDGER in Memory with FW RULES in NSX-T
+    # - Deletes/ Add RULES and CTX
+
+# PUSH OPERATION
+# - get FW STATS, add Transaction based on HITS
+# - updates local hits in LocalLedger Memory
+
+# Local Update
+# Writes to localDB
